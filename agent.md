@@ -120,6 +120,8 @@ LifeQuest 的核心设计原则如下，不得在实现中破坏：
 - `docs/requirements/`
 - `docs/current_process.md`
 
+每次后端发生更改时，必须检查 `docs/api/mvp_api_design.md` 是否仍与实际后端架构和接口实现相符。
+如果后端接口路径、请求字段、响应字段、错误码、鉴权规则、用户身份来源、核心业务流程或模块边界发生变化，且 `docs/api/mvp_api_design.md` 与实现不一致，必须在同次修改中及时更新该文档。
 如果功能涉及接口字段、数据库字段、核心流程或模块边界，必须更新对应文档或在任务说明中明确记录待更新项。
 每次项目取得进展后，必须在 `docs/current_process.md` 中记录已完成工作和后续 TODO。
 
@@ -152,6 +154,7 @@ LifeQuest 的核心设计原则如下，不得在实现中破坏：
 4. 确认当前任务影响范围
 5. 制定最小可行改动
 6. 创建或修改对应文件
-7. 运行必要验证
-8. 更新 `docs/current_process.md`
-9. 汇总本次变更和后续建议
+7. 如果后端发生更改，检查并按需更新 `docs/api/mvp_api_design.md`
+8. 运行必要验证
+9. 更新 `docs/current_process.md`
+10. 汇总本次变更和后续建议

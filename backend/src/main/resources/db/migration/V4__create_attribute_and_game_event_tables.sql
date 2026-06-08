@@ -1,0 +1,102 @@
+CREATE TABLE user_attribute (
+    id BIGINT NOT NULL AUTO_INCREMENT,
+    user_id BIGINT NOT NULL,
+    focus INT NOT NULL DEFAULT 50,
+    discipline INT NOT NULL DEFAULT 50,
+    knowledge INT NOT NULL DEFAULT 50,
+    energy INT NOT NULL DEFAULT 50,
+    mood INT NOT NULL DEFAULT 50,
+    execution INT NOT NULL DEFAULT 50,
+    balance INT NOT NULL DEFAULT 50,
+    level INT NOT NULL DEFAULT 1,
+    exp INT NOT NULL DEFAULT 0,
+    total_exp INT NOT NULL DEFAULT 0,
+    created_at DATETIME(6) NOT NULL DEFAULT CURRENT_TIMESTAMP(6),
+    updated_at DATETIME(6) NOT NULL DEFAULT CURRENT_TIMESTAMP(6) ON UPDATE CURRENT_TIMESTAMP(6),
+    PRIMARY KEY (id),
+    CONSTRAINT uk_user_attribute_user_id UNIQUE (user_id),
+    CONSTRAINT fk_user_attribute_user FOREIGN KEY (user_id) REFERENCES `user` (id) ON DELETE CASCADE,
+    CONSTRAINT chk_user_attribute_focus CHECK (focus >= 0 AND focus <= 100),
+    CONSTRAINT chk_user_attribute_discipline CHECK (discipline >= 0 AND discipline <= 100),
+    CONSTRAINT chk_user_attribute_knowledge CHECK (knowledge >= 0 AND knowledge <= 100),
+    CONSTRAINT chk_user_attribute_energy CHECK (energy >= 0 AND energy <= 100),
+    CONSTRAINT chk_user_attribute_mood CHECK (mood >= 0 AND mood <= 100),
+    CONSTRAINT chk_user_attribute_execution CHECK (execution >= 0 AND execution <= 100),
+    CONSTRAINT chk_user_attribute_balance CHECK (balance >= 0 AND balance <= 100),
+    CONSTRAINT chk_user_attribute_level CHECK (level >= 1),
+    CONSTRAINT chk_user_attribute_exp CHECK (exp >= 0),
+    CONSTRAINT chk_user_attribute_total_exp CHECK (total_exp >= 0)
+) ENGINE = InnoDB DEFAULT CHARSET = utf8mb4 COLLATE = utf8mb4_unicode_ci;
+
+CREATE TABLE attribute_change (
+    id BIGINT NOT NULL AUTO_INCREMENT,
+    user_id BIGINT NOT NULL,
+    daily_log_id BIGINT NOT NULL,
+    log_date DATE NOT NULL,
+    focus_delta INT NOT NULL DEFAULT 0,
+    discipline_delta INT NOT NULL DEFAULT 0,
+    knowledge_delta INT NOT NULL DEFAULT 0,
+    energy_delta INT NOT NULL DEFAULT 0,
+    mood_delta INT NOT NULL DEFAULT 0,
+    execution_delta INT NOT NULL DEFAULT 0,
+    balance_delta INT NOT NULL DEFAULT 0,
+    exp_delta INT NOT NULL DEFAULT 0,
+    reason_json JSON NOT NULL,
+    created_at DATETIME(6) NOT NULL DEFAULT CURRENT_TIMESTAMP(6),
+    PRIMARY KEY (id),
+    CONSTRAINT fk_attribute_change_user FOREIGN KEY (user_id) REFERENCES `user` (id) ON DELETE CASCADE,
+    CONSTRAINT fk_attribute_change_daily_log FOREIGN KEY (daily_log_id) REFERENCES daily_log (id) ON DELETE CASCADE,
+    CONSTRAINT uk_attribute_change_user_date UNIQUE (user_id, log_date),
+    INDEX idx_attribute_change_daily_log_id (daily_log_id)
+) ENGINE = InnoDB DEFAULT CHARSET = utf8mb4 COLLATE = utf8mb4_unicode_ci;
+
+CREATE TABLE game_event (
+    id BIGINT NOT NULL AUTO_INCREMENT,
+    user_id BIGINT NOT NULL,
+    daily_log_id BIGINT NULL,
+    log_date DATE NULL,
+    event_type VARCHAR(64) NOT NULL,
+    event_code VARCHAR(64) NULL,
+    event_name VARCHAR(128) NOT NULL,
+    event_level INT NULL,
+    event_description VARCHAR(1024) NULL,
+    effect_json JSON NULL,
+    created_at DATETIME(6) NOT NULL DEFAULT CURRENT_TIMESTAMP(6),
+    PRIMARY KEY (id),
+    CONSTRAINT fk_game_event_user FOREIGN KEY (user_id) REFERENCES `user` (id) ON DELETE CASCADE,
+    CONSTRAINT fk_game_event_daily_log FOREIGN KEY (daily_log_id) REFERENCES daily_log (id) ON DELETE CASCADE,
+    CONSTRAINT chk_game_event_type CHECK (event_type IN ('ENEMY', 'BUFF', 'DEBUFF', 'ACHIEVEMENT', 'STORY', 'ROUTE')),
+    CONSTRAINT chk_game_event_level CHECK (event_level IS NULL OR event_level >= 1),
+    INDEX idx_game_event_user_date (user_id, log_date),
+    INDEX idx_game_event_daily_log_id (daily_log_id),
+    INDEX idx_game_event_type (user_id, event_type)
+) ENGINE = InnoDB DEFAULT CHARSET = utf8mb4 COLLATE = utf8mb4_unicode_ci;
+
+CREATE TABLE achievement (
+    id BIGINT NOT NULL AUTO_INCREMENT,
+    achievement_code VARCHAR(64) NOT NULL,
+    achievement_name VARCHAR(128) NOT NULL,
+    description VARCHAR(512) NOT NULL,
+    unlock_rule_json JSON NOT NULL,
+    bonus_json JSON NULL,
+    status VARCHAR(32) NOT NULL DEFAULT 'ACTIVE',
+    created_at DATETIME(6) NOT NULL DEFAULT CURRENT_TIMESTAMP(6),
+    updated_at DATETIME(6) NOT NULL DEFAULT CURRENT_TIMESTAMP(6) ON UPDATE CURRENT_TIMESTAMP(6),
+    PRIMARY KEY (id),
+    CONSTRAINT uk_achievement_code UNIQUE (achievement_code),
+    CONSTRAINT chk_achievement_status CHECK (status IN ('ACTIVE', 'DISABLED'))
+) ENGINE = InnoDB DEFAULT CHARSET = utf8mb4 COLLATE = utf8mb4_unicode_ci;
+
+CREATE TABLE user_achievement (
+    id BIGINT NOT NULL AUTO_INCREMENT,
+    user_id BIGINT NOT NULL,
+    achievement_id BIGINT NOT NULL,
+    unlocked_at DATETIME(6) NOT NULL DEFAULT CURRENT_TIMESTAMP(6),
+    display_enabled BOOLEAN NOT NULL DEFAULT TRUE,
+    created_at DATETIME(6) NOT NULL DEFAULT CURRENT_TIMESTAMP(6),
+    PRIMARY KEY (id),
+    CONSTRAINT fk_user_achievement_user FOREIGN KEY (user_id) REFERENCES `user` (id) ON DELETE CASCADE,
+    CONSTRAINT fk_user_achievement_achievement FOREIGN KEY (achievement_id) REFERENCES achievement (id) ON DELETE CASCADE,
+    CONSTRAINT uk_user_achievement UNIQUE (user_id, achievement_id),
+    INDEX idx_user_achievement_user_id (user_id)
+) ENGINE = InnoDB DEFAULT CHARSET = utf8mb4 COLLATE = utf8mb4_unicode_ci;

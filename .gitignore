@@ -23,6 +23,19 @@
 hs_err_pid*
 replay_pid*
 
+# Build output
+target/
+dist/
+coverage/
+*.tsbuildinfo
+
+# Dependencies
+node_modules/
+
+# Environment
+.env.local
+.env.*.local
+
 # macOS
 .DS_Store
 

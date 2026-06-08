@@ -1,0 +1,27 @@
+spring:
+  datasource:
+    url: ${LIFEQUEST_MYSQL_URL:jdbc:mysql://localhost:3306/lifequest?useUnicode=true&characterEncoding=utf8&useSSL=false&serverTimezone=Asia/Shanghai}
+    username: ${LIFEQUEST_MYSQL_USERNAME:lifequest}
+    password: ${LIFEQUEST_MYSQL_PASSWORD:lifequest}
+    driver-class-name: com.mysql.cj.jdbc.Driver
+  jpa:
+    open-in-view: false
+    hibernate:
+      ddl-auto: validate
+    properties:
+      hibernate:
+        format_sql: true
+  flyway:
+    enabled: true
+    locations: classpath:db/migration
+  data:
+    mongodb:
+      uri: ${LIFEQUEST_MONGODB_URI:mongodb://localhost:27017/lifequest}
+    redis:
+      host: ${LIFEQUEST_REDIS_HOST:localhost}
+      port: ${LIFEQUEST_REDIS_PORT:6379}
+      password: ${LIFEQUEST_REDIS_PASSWORD:}
+
+logging:
+  level:
+    com.lifequest: DEBUG

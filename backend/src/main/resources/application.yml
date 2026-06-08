@@ -1,0 +1,30 @@
+spring:
+  application:
+    name: lifequest-backend
+  profiles:
+    default: local
+
+server:
+  port: 8080
+  servlet:
+    context-path: /api
+
+management:
+  endpoints:
+    web:
+      exposure:
+        include: health,info
+  endpoint:
+    health:
+      show-details: when_authorized
+
+lifequest:
+  security:
+    jwt:
+      issuer: lifequest
+      secret: ${LIFEQUEST_JWT_SECRET:lifequest-development-secret-change-me-please-32-bytes}
+      access-token-ttl-minutes: 60
+      refresh-token-ttl-days: 14
+  llm:
+    enabled: false
+    timeout-seconds: 30

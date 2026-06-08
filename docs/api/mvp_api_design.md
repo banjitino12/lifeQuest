@@ -16,7 +16,7 @@ MVP 接口覆盖以下闭环：
 
 - 评分结果由后端规则计算，前端不提交最终评分。
 - LLM 结果可以异步生成，基础结算接口必须在 LLM 失败时仍可用。
-- 除注册登录外，所有业务接口默认需要 JWT 鉴权。
+- 除注册、登录、刷新 Token 和健康检查外，所有业务接口默认需要 JWT 鉴权。
 - 用户业务数据必须以后端解析出的当前用户为准，不信任前端传入的 `userId`。
 - 接口字段命名使用小驼峰，数据库字段使用下划线。
 
@@ -64,7 +64,7 @@ Authorization: Bearer <accessToken>
 | code | HTTP 状态码 | 说明 |
 | --- | --- | --- |
 | OK | 200 | 请求成功 |
-| CREATED | 201 | 创建成功 |
+| CREATED | 200 | 创建成功，当前后端统一由 `ApiResponse.created` 返回 `CREATED` 业务码，HTTP 状态仍为 200 |
 | VALIDATION_ERROR | 400 | 参数校验失败 |
 | UNAUTHORIZED | 401 | 未登录或 Token 无效 |
 | FORBIDDEN | 403 | 无权限 |
@@ -98,12 +98,13 @@ POST /api/auth/register
 ```json
 {
   "code": "CREATED",
-  "message": "registered",
+  "message": "created",
   "data": {
     "userId": 1,
     "username": "tiantian",
     "accessToken": "jwt-access-token",
-    "refreshToken": "jwt-refresh-token"
+    "refreshToken": "jwt-refresh-token",
+    "profileCompleted": false
   }
 }
 ```
@@ -113,6 +114,8 @@ POST /api/auth/register
 - `username` 必填且唯一。
 - `email` 和 `phone` 至少填写一个。
 - `password` 后端必须加密后存储。
+- 当前后端注册成功后会直接签发 `accessToken` 和 `refreshToken`。
+- `profileCompleted` 注册时默认为 `false`。
 
 ### 3.2 用户登录
 
@@ -145,6 +148,12 @@ POST /api/auth/login
 }
 ```
 
+规则：
+
+- `account` 支持用户名、邮箱或手机号。
+- 只允许 `ACTIVE` 状态用户登录。
+- 登录成功会刷新用户最近登录时间。
+
 ### 3.3 刷新 Token
 
 ```http
@@ -166,11 +175,20 @@ POST /api/auth/refresh
   "code": "OK",
   "message": "success",
   "data": {
+    "userId": 1,
+    "username": "tiantian",
     "accessToken": "new-jwt-access-token",
-    "refreshToken": "new-jwt-refresh-token"
+    "refreshToken": "new-jwt-refresh-token",
+    "profileCompleted": false
   }
 }
 ```
+
+规则：
+
+- 该接口无需携带 `Authorization` 请求头。
+- `refreshToken` 必须是后端签发的 refresh token，access token 不能用于刷新。
+- 刷新成功后返回完整认证响应，字段与登录响应一致。
 
 ### 3.4 退出登录
 
@@ -178,15 +196,24 @@ POST /api/auth/refresh
 POST /api/auth/logout
 ```
 
+鉴权：
+
+- 需要携带有效 `Authorization: Bearer <accessToken>`。
+
 响应：
 
 ```json
 {
   "code": "OK",
-  "message": "logged out",
+  "message": "success",
   "data": null
 }
 ```
+
+说明：
+
+- 当前后端为 JWT stateless 模式，退出登录接口返回成功响应。
+- Redis Token 黑名单尚未接入，后续基础设施完成后可增强服务端失效能力。
 
 ## 4. 当前用户接口
 
@@ -212,6 +239,11 @@ GET /api/users/me
   }
 }
 ```
+
+规则：
+
+- 后端从 JWT 解析当前用户 ID，再读取用户信息。
+- 前端不得传入 `userId` 决定查询范围。
 
 ### 4.2 更新当前用户信息
 
@@ -242,6 +274,14 @@ PATCH /api/users/me
 }
 ```
 
+规则：
+
+- 需要 JWT 鉴权。
+- 后端从 JWT 解析当前用户 ID，再更新当前用户资料。
+- `username` 可选；如果传入，必须唯一。
+- `avatar` 可选；如果传入空字符串，后端会保存为空值。
+- 前端不得传入 `userId` 决定更新范围。
+
 ## 5. 用户目标与偏好接口
 
 ### 5.1 获取个人目标配置
@@ -269,6 +309,32 @@ GET /api/profile/me
   }
 }
 ```
+
+未完成目标配置时响应：
+
+```json
+{
+  "code": "OK",
+  "message": "success",
+  "data": {
+    "goalType": null,
+    "currentGoal": null,
+    "goalPeriod": null,
+    "weeklyPlanHours": null,
+    "currentStage": null,
+    "feedbackStyle": null,
+    "routeId": null,
+    "routeName": null,
+    "completed": false
+  }
+}
+```
+
+规则：
+
+- 需要 JWT 鉴权。
+- 后端从 JWT 解析当前用户 ID，再读取当前用户目标配置。
+- 前端不得传入 `userId` 决定查询范围。
 
 ### 5.2 创建或更新个人目标配置
 
@@ -306,8 +372,16 @@ PUT /api/profile/me
 
 规则：
 
+- 需要 JWT 鉴权。
+- 后端从 JWT 解析当前用户 ID，再创建或更新当前用户目标配置。
+- 前端不得传入 `userId` 决定保存范围。
+- `goalType` 必须是 `STUDY_EXAM`、`JOB_INTERVIEW`、`HEALTHY_LIFE`、`GENERAL_GROWTH`、`CUSTOM` 之一。
+- `feedbackStyle` 必须是 `CALM_COACH`、`GENTLE_COMPANION`、`SHARP_SUPERVISOR`、`GAME_NARRATOR`、`GALGAME_CHARACTER` 之一。
+- `routeId` 可选；如果不传，后端会按 `goalType` 绑定默认成长路线。
+- 如果传入 `routeId`，该路线必须存在且处于 `ACTIVE` 状态。
 - 首次保存 profile 时初始化 `user_attribute`。
-- 如果绑定路线，则初始化 `user_route_progress`。
+- 首次保存 profile 时初始化 `user_route_progress`。
+- 如果用户属性或路线进度已存在，后端不会重复创建。
 
 ## 6. 成长首页接口
 
@@ -384,47 +458,35 @@ POST /api/daily-logs
 }
 ```
 
-同步响应：
+当前同步响应：
 
 ```json
 {
   "code": "CREATED",
-  "message": "daily log submitted",
+  "message": "created",
   "data": {
     "dailyLogId": 1001,
     "logDate": "2026-06-08",
-    "settlementId": 1001,
-    "score": {
-      "dailyScore": 78.5,
-      "rating": "B",
-      "growthScore": 82,
-      "executionScore": 75,
-      "energyScore": 68,
-      "moodScore": 70,
-      "distractionScore": 65,
-      "reflectionScore": 85
-    },
-    "attributeChange": {
-      "focusDelta": 2,
-      "disciplineDelta": 1,
-      "knowledgeDelta": 5,
-      "energyDelta": -1,
-      "moodDelta": 0,
-      "executionDelta": 3,
-      "balanceDelta": -1,
-      "expDelta": 56
-    },
-    "llmStatus": "PENDING"
+    "sourceType": "MIXED",
+    "llmStatus": "SUCCESS",
+    "updated": false
   }
 }
 ```
 
 规则：
 
-- 同一用户同一天默认只允许一条主记录。
-- 重复提交同一天记录可返回 `CONFLICT`，或后续设计 PUT 更新接口。
-- 后端同步完成保存、规则评分、属性变化和基础事件。
-- LLM 反馈、旁白、明日任务可以异步生成。
+- 该接口需要 JWT 鉴权，后端从 Token 解析当前用户 ID，不接受前端传入 `userId`。
+- 同一用户同一天只保留一条主记录；重复提交采用创建或更新策略，已存在时更新原记录并返回 `updated=true`。
+- 后端会保存结构化表单字段，也会在传入 `rawText` 时保存自然语言原始日志。
+- `sourceType` 支持 `FORM`、`NATURAL_LANGUAGE`、`MIXED`；未传时，有 `rawText` 默认推断为 `NATURAL_LANGUAGE`，否则推断为 `FORM`。
+- `studyHours`、`workHours`、`sleepHours` 范围为 `0-24`。
+- `exerciseMinutes`、`entertainmentMinutes` 范围为 `0-1440`。
+- `taskCompletionRate` 范围为 `0-100`。
+- 当 `sourceType` 不是 `FORM` 且 `rawText` 非空时，后端会调用 `LlmService.parseDailyLog` 尝试解析自然语言日志。
+- 表单字段优先级高于 LLM 解析字段；LLM 解析结果只补充缺失的 `exerciseMinutes`、`entertainmentMinutes`、`moodTag` 等基础字段。
+- 自然语言解析失败不会阻断保存，后端会保留 `rawText`，使用表单字段完成基础保存，并返回 `llmStatus=FAILED`。
+- 当前接口已完成记录保存和自然语言解析降级；规则评分、属性变化、基础事件、结算和明日任务生成将在后续模块接入。
 
 ### 7.2 获取每日记录详情
 
@@ -460,6 +522,10 @@ GET /api/daily-logs/{dailyLogId}
 }
 ```
 
+当前实现状态：
+
+- 该接口仍处于 MVP 设计阶段，后端尚未实现。
+
 ### 7.3 按日期获取每日记录
 
 ```http
@@ -467,6 +533,10 @@ GET /api/daily-logs/by-date?date=2026-06-08
 ```
 
 响应同 7.2。
+
+当前实现状态：
+
+- 该接口仍处于 MVP 设计阶段，后端尚未实现。
 
 ### 7.4 获取每日记录列表
 
@@ -499,9 +569,90 @@ GET /api/daily-logs?startDate=2026-06-01&endDate=2026-06-08&page=1&pageSize=20
 }
 ```
 
+当前实现状态：
+
+- 该接口仍处于 MVP 设计阶段，后端尚未实现。
+
 ## 8. 每日结算接口
 
-### 8.1 获取每日结算
+### 8.1 提交每日记录并同步结算
+
+```http
+POST /api/settlements
+```
+
+请求字段与 `POST /api/daily-logs` 一致。
+
+响应：
+
+```json
+{
+  "code": "CREATED",
+  "message": "created",
+  "data": {
+    "dailyLogId": 1001,
+    "logDate": "2026-06-08",
+    "sourceType": "MIXED",
+    "dailyLogUpdated": false,
+    "score": {
+      "dailyScore": 78.5,
+      "rating": "B",
+      "growthScore": 82,
+      "executionScore": 75,
+      "energyScore": 68,
+      "moodScore": 70,
+      "distractionScore": 65,
+      "reflectionScore": 85,
+      "reasons": {
+        "growthScore": "学习成长由学习时长、工作/项目推进和完成内容计算。",
+        "dailyScore": "每日总分按权重计算。"
+      }
+    },
+    "attributeChange": {
+      "focusDelta": 2,
+      "disciplineDelta": 1,
+      "knowledgeDelta": 5,
+      "energyDelta": -1,
+      "moodDelta": 0,
+      "executionDelta": 3,
+      "balanceDelta": -1,
+      "expDelta": 78,
+      "reasons": {
+        "focus": "专注力由娱乐控制分、学习时长和娱乐时长共同决定。"
+      }
+    },
+    "events": [
+      {
+        "eventType": "ENEMY",
+        "eventCode": "SHORT_VIDEO_TEMPTATION",
+        "eventName": "短视频魅魔",
+        "eventLevel": 2,
+        "eventDescription": "娱乐失控和任务推进不足被外化为今日主要敌人。",
+        "effectJson": "{\"risk\":\"entertainment\"}"
+      }
+    ],
+    "llm": {
+      "status": "FAILED",
+      "fallbackUsed": true,
+      "feedback": "LLM 反馈暂不可用，已展示规则结算结果。",
+      "storyNarration": "规则结算已完成，剧情旁白稍后可由 LLM 生成。"
+    },
+    "tomorrowTasks": [],
+    "basicSuggestion": "明天先守住晚间娱乐边界，把高风险时段提前设为防御任务。"
+  }
+}
+```
+
+规则：
+
+- 该接口需要 JWT 鉴权，后端从 Token 解析当前用户 ID。
+- 该接口复用每日记录提交逻辑，会保存或更新同一用户同一天的 `daily_log`。
+- 同步编排 `dailylog -> llm parse -> scoring -> attribute -> gamification -> settlement`。
+- LLM 自然语言解析失败不会阻断基础结算；评分、属性变化、游戏化事件和基础建议仍由规则同步返回。
+- 当前 `llm.feedback` 和 `llm.storyNarration` 为规则降级文案；完整 LLM 反馈、剧情旁白和明日任务将在后续 LLM / 任务模块接入。
+- 同一天重复结算时，评分、属性变化和游戏化事件会按幂等规则重新计算，避免重复叠加。
+
+### 8.2 获取每日结算
 
 ```http
 GET /api/settlements/by-date?date=2026-06-08
@@ -516,13 +667,20 @@ GET /api/settlements/by-date?date=2026-06-08
   "data": {
     "dailyLogId": 1001,
     "logDate": "2026-06-08",
-    "rating": "B",
-    "dailyScore": 78.5,
-    "expDelta": 56,
-    "scoreReasons": {
-      "growthScore": "学习时长达到 3.5 小时，并推进 Redis 主题。",
-      "energyScore": "睡眠 6.5 小时，恢复略不足。",
-      "distractionScore": "娱乐时间 90 分钟，存在晚间分心。"
+    "sourceType": "MIXED",
+    "dailyLogUpdated": false,
+    "score": {
+      "dailyScore": 78.5,
+      "rating": "B",
+      "growthScore": 82,
+      "executionScore": 75,
+      "energyScore": 68,
+      "moodScore": 70,
+      "distractionScore": 65,
+      "reflectionScore": 85,
+      "reasons": {
+        "dailyScore": "每日总分按权重计算。"
+      }
     },
     "attributeChange": {
       "focusDelta": 2,
@@ -532,52 +690,40 @@ GET /api/settlements/by-date?date=2026-06-08
       "moodDelta": 0,
       "executionDelta": 3,
       "balanceDelta": -1,
-      "reasons": [
-        "知识积累 +5：今天推进 Redis 学习和项目接口。",
-        "精力 -1：睡眠时长低于理想恢复水平。"
-      ]
+      "expDelta": 78,
+      "reasons": {
+        "focus": "专注力由娱乐控制分、学习时长和娱乐时长共同决定。"
+      }
     },
     "events": [
       {
         "eventType": "ENEMY",
+        "eventCode": "SHORT_VIDEO_TEMPTATION",
         "eventName": "短视频魅魔",
         "eventLevel": 2,
-        "eventDescription": "娱乐时间偏高，影响晚间专注。"
-      },
-      {
-        "eventType": "BUFF",
-        "eventName": "复盘洞察",
-        "eventDescription": "完成了有效复盘。"
+        "eventDescription": "娱乐失控和任务推进不足被外化为今日主要敌人。",
+        "effectJson": "{\"risk\":\"entertainment\"}"
       }
     ],
     "llm": {
-      "status": "SUCCESS",
-      "feedback": "你今天推进了 Redis 迷宫，但晚间分心仍然在影响节奏。",
-      "storyNarration": "Redis 迷宫的门已经打开，真正的考验是守住晚上的注意力。",
-      "fallbackUsed": false
+      "status": "FAILED",
+      "fallbackUsed": true,
+      "feedback": "LLM 反馈暂不可用，已展示规则结算结果。",
+      "storyNarration": "规则结算已完成，剧情旁白稍后可由 LLM 生成。"
     },
-    "tomorrowTasks": [
-      {
-        "taskType": "MAIN",
-        "title": "整理 Redis 缓存三兄弟对比表",
-        "generatedBy": "LLM"
-      },
-      {
-        "taskType": "SIDE",
-        "title": "运动 20 分钟",
-        "generatedBy": "LLM"
-      },
-      {
-        "taskType": "DEFENSE",
-        "title": "22:30 后不刷短视频",
-        "generatedBy": "LLM"
-      }
-    ]
+    "tomorrowTasks": [],
+    "basicSuggestion": "明天先守住晚间娱乐边界，把高风险时段提前设为防御任务。"
   }
 }
 ```
 
-### 8.2 刷新 LLM 反馈
+规则：
+
+- 该接口需要 JWT 鉴权，只能读取当前用户自己的结算。
+- 当前实现读取已生成的 `daily_log`、`daily_score`、`attribute_change` 和 `game_event`。
+- 如果当天尚未提交记录或尚未生成结算，返回 `NOT_FOUND`。
+
+### 8.3 刷新 LLM 反馈
 
 ```http
 POST /api/settlements/{dailyLogId}/llm-refresh
@@ -600,8 +746,9 @@ POST /api/settlements/{dailyLogId}/llm-refresh
 
 - 用于 LLM 失败后手动重试。
 - 不重新计算规则评分。
+- 当前接口仍处于 MVP 设计阶段，后端尚未实现。
 
-### 8.3 查询 LLM 生成状态
+### 8.4 查询 LLM 生成状态
 
 ```http
 GET /api/settlements/{dailyLogId}/llm-status
@@ -622,6 +769,10 @@ GET /api/settlements/{dailyLogId}/llm-status
   }
 }
 ```
+
+当前实现状态：
+
+- 该接口仍处于 MVP 设计阶段，后端尚未实现。
 
 ## 9. 明日任务接口
 
@@ -1076,6 +1227,7 @@ GET /api/dictionaries
 - `PUT /api/profile/me`
 - `GET /api/dashboard`
 - `POST /api/daily-logs`
+- `POST /api/settlements`
 - `GET /api/settlements/by-date`
 - `GET /api/tasks`
 - `GET /api/trends/summary`
@@ -1107,4 +1259,3 @@ GET /api/dictionaries
 - `POST /api/weekly-reports`
 - `GET /api/weekly-reports/{weeklyReportId}`
 - `GET /api/weekly-reports`
-

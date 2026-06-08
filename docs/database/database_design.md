@@ -551,7 +551,12 @@ V2__create_route_tables.sql
 V3__create_daily_log_and_score_tables.sql
 V4__create_attribute_and_game_event_tables.sql
 V5__create_llm_and_report_tables.sql
+V6__seed_default_growth_routes.sql
 ```
+
+说明：
+
+- `V6__seed_default_growth_routes.sql` 用于预置 MVP 默认成长路线，支持用户首次保存目标配置时按 `goal_type` 自动绑定默认路线。
 
 ## 9. MVP 建表优先级
 
@@ -585,4 +590,3 @@ MVP 闭环必须优先创建：
 
 - `achievement`
 - `user_achievement`
-
