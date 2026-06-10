@@ -1,4 +1,5 @@
 import { createRouter, createWebHistory, type RouteRecordRaw } from 'vue-router';
+import { hasAccessToken } from '@/utils/authToken';
 
 const routes: RouteRecordRaw[] = [
   {
@@ -80,6 +81,24 @@ const routes: RouteRecordRaw[] = [
 const router = createRouter({
   history: createWebHistory(import.meta.env.BASE_URL),
   routes,
+});
+
+router.beforeEach((to) => {
+  const isPublicRoute = Boolean(to.meta.public);
+  const isLoggedIn = hasAccessToken();
+
+  if (!isPublicRoute && !isLoggedIn) {
+    return {
+      name: 'login',
+      query: { redirect: to.fullPath },
+    };
+  }
+
+  if (isPublicRoute && isLoggedIn && (to.name === 'login' || to.name === 'register')) {
+    return { name: 'dashboard' };
+  }
+
+  return true;
 });
 
 router.afterEach((to) => {

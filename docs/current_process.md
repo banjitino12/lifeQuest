@@ -212,6 +212,48 @@
   - 更新 `docs/api/mvp_api_design.md`，同步 `POST /settlements` 和 `GET /settlements/by-date` 的实际行为与响应结构
   - 更新 `docs/architecture/system_architecture.md`，同步当前每日结算同步编排流程和 LLM 降级规则
   - 已通过 `mvn test` 验证后端 39 个测试全部成功
+- 归档前端成长首页设计参考：
+  - 新增 `docs/frontend/design/dashboard_reference.md`，记录用户提供的成长首页设计图、可实现性分析和 MVP 落地策略
+  - 保存设计图片到 `docs/frontend/design/assets/lifequest-dashboard-reference.png`
+  - 明确该设计可实现，适合作为高保真视觉方向参考；MVP 先落地布局、信息架构和核心组件，再逐步替换高质量插画与徽章资产
+  - 补充 UI 组件、图标、插画、徽章与状态素材板，并在前端设计文档中记录素材可用性、使用策略和后续切图建议
+- 建立前端应用基础架构：
+  - 补齐 `api/`、`types/`、`stores/`、`components/layout/`、`components/charts/`、`components/game/`、`utils/` 的可用基础结构
+  - 封装 Axios 请求实例，统一处理 `/api` 基础路径、JSON 请求头、JWT Token 注入、通用响应解包和 API 错误对象
+  - 增加 401 未登录兜底处理，自动清理本地 Token 并跳转登录页
+  - 新增认证接口封装，覆盖注册、登录、刷新 Token、退出登录和获取当前用户信息
+  - 新增认证状态 Pinia Store，支持登录、注册、退出、刷新会话、拉取当前用户和本地 Token 持久化
+  - 新增路由守卫，开放注册登录页，其他业务页面默认需要登录访问
+  - 新增 `AppPage`、`AppCard`、`ChartPanel`、`GameEventCard`、`AttributeBadge` 等可复用基础组件
+  - 更新应用头部登录态展示和退出入口
+  - 已通过 `npm run build` 验证前端类型检查和生产构建可用；当前仍存在 Element Plus 全量引入导致的包体提示，后续按需优化
+- 实现登录注册页：
+  - 将 `LoginView` 和 `RegisterView` 从占位页替换为真实 Element Plus 表单
+  - 登录页接入 `authStore.login`，支持用户名、邮箱或手机号作为账号登录
+  - 注册页接入 `authStore.register`，支持用户名、邮箱、手机号、密码和确认密码，并校验邮箱和手机号至少填写一个
+  - 登录成功后保存 Token，并跳转到原始 `redirect` 目标或成长首页
+  - 注册成功后保存 Token；当前目标配置页尚未实现，先引导进入成长首页
+  - 表单提交失败时统一展示后端错误消息或本地兜底提示
+  - 已通过 `npm run build` 验证前端类型检查和生产构建可用
+  - 已通过浏览器冒烟检查确认登录页和注册页可正常访问、标题/输入框/按钮/跳转链接正常渲染
+- 实现每日记录页：
+  - 将 `DailyLogView` 从占位页替换为真实记录表单
+  - 新增 `frontend/src/api/dailyLog.ts`，封装 `POST /daily-logs`、`POST /settlements` 和 `GET /settlements/by-date`
+  - 新增 `frontend/src/types/dailyLog.ts`，定义每日记录提交、每日记录摘要和每日结算响应类型
+  - 页面支持记录日期、学习时长、工作/项目时长、睡眠时长、运动时长、娱乐时长、心情、任务完成率等结构化字段
+  - 页面支持自然语言原始日志、今日完成内容、今日问题和今日复盘
+  - 页面支持本地任务清单，勾选后自动同步任务完成率，并将任务摘要合并进 `completedContent`
+  - 提交时优先调用 `POST /api/settlements`，让后端同步完成每日记录保存和结算
+  - 提交成功后跳转到每日结算页，并携带 `date` 查询参数
+  - 已通过 `npm run build` 验证前端类型检查和生产构建可用
+- 实现每日结算页和成长首页基础版：
+  - 将 `SettlementView` 从占位页替换为真实结算展示页，支持按 `date` 查询 `GET /api/settlements/by-date`
+  - 每日结算页展示每日评分、评级、经验变化、六维评分进度、属性变化、游戏化事件、LLM 降级状态、基础建议和明日任务占位
+  - 每日结算页在暂无结果时提供跳转每日记录的空状态入口
+  - 将 `DashboardView` 从占位页替换为成长首页基础版，展示用户状态、今日评分、等级经验、当前路线、连续记录天数、属性雷达图、Buff / Debuff 和快捷入口
+  - 新增 `AttributeRadarChart`，使用 ECharts 渲染属性雷达图
+  - 成长首页会尝试读取当天结算数据；后端聚合接口未完成或当天无结算时，使用 MVP 占位数据保证页面可用
+  - 已通过 `npm run build` 验证前端类型检查和生产构建可用；当前 ECharts 和 Element Plus 全量引入导致包体提示，后续按需拆包优化
 
 ## 当前目录状态
 
@@ -304,8 +346,40 @@ LifeQuest/
 │   └── src/
 │       ├── App.vue
 │       ├── main.ts
+│       ├── api/
+│       │   ├── auth.ts
+│       │   ├── dailyLog.ts
+│       │   ├── http.ts
+│       │   └── index.ts
+│       ├── components/
+│       │   ├── charts/
+│       │   │   ├── AttributeRadarChart.vue
+│       │   │   ├── ChartPanel.vue
+│       │   │   └── index.ts
+│       │   ├── game/
+│       │   │   ├── AttributeBadge.vue
+│       │   │   ├── GameEventCard.vue
+│       │   │   └── index.ts
+│       │   └── layout/
+│       │       ├── AppCard.vue
+│       │       ├── AppPage.vue
+│       │       └── index.ts
 │       ├── router/index.ts
+│       ├── stores/
+│       │   ├── auth.ts
+│       │   └── index.ts
 │       ├── styles/main.css
+│       ├── types/
+│       │   ├── api.ts
+│       │   ├── auth.ts
+│       │   ├── dailyLog.ts
+│       │   ├── game.ts
+│       │   ├── index.ts
+│       │   └── user.ts
+│       ├── utils/
+│       │   ├── apiError.ts
+│       │   ├── authToken.ts
+│       │   └── index.ts
 │       └── views/
 │           ├── auth/
 │           ├── daily-log/
@@ -322,12 +396,52 @@ LifeQuest/
 │   │   └── system_architecture.md
 │   ├── api/
 │   │   └── mvp_api_design.md
-│   └── database/
-│       └── database_design.md
+│   ├── database/
+│   │   └── database_design.md
+│   └── frontend/
+│       └── design/
+│           ├── dashboard_reference.md
+│           └── assets/
+│               ├── lifequest-dashboard-reference.png
+│               ├── lifequest-ui-components-sheet.png
+│               ├── lifequest-icons-sheet.png
+│               ├── lifequest-illustrations-sheet.png
+│               └── lifequest-badges-states-sheet.png
 ├── infra/
 ├── scripts/
 └── .github/workflows/
 ```
+
+## 前端架构与 MVP 落地策略
+
+前端页面应以已归档的 LifeQuest 高保真设计图作为视觉目标，但 MVP 阶段不要求像素级复刻，不把完整插画、徽章、装饰边框和复杂动效作为阻塞项。当前阶段优先保证真实产品流程可运行、核心数据能展示、主要操作路径清晰。
+
+### 页面落地优先级
+
+1. 登录注册页：
+   - 优先接入后端认证接口，完成登录、注册、Token 保存和登录态跳转
+   - 登录和注册建议使用 Tab 切换，避免同屏展开两个完整表单造成操作干扰
+2. 每日记录页：
+   - 优先实现时间分配、心情、任务完成率、完成内容、遇到问题、今日复盘和任务清单
+   - 支持提交结构化表单和自然语言日志，并展示 LLM 解析预览或降级提示
+   - 保证用户能在 3 分钟内完成一次每日记录
+3. 每日结算页：
+   - 优先展示评级、经验、属性变化、触发事件、Buff / Debuff、基础建议和明日任务
+   - 结算结果必须来自后端规则评分、属性变化和游戏化事件，不在前端硬编码核心评分规则
+4. 成长首页基础版：
+   - 展示今日评分、当前等级、经验条、当前路线、连续记录天数、属性雷达图、今日事件和快捷入口
+   - 后端成长首页聚合接口完成前，可先通过已有接口或 mock 数据搭建页面结构
+5. 成长路线页、数据趋势页、周报页：
+   - MVP 可先完成静态或 mock 页面骨架
+   - 等后端路线、趋势和周报接口完善后，再接入真实数据
+
+### 视觉实现原则
+
+- 保留 LifeQuest 的核心视觉语言：羊皮纸背景、绿色主导航、RPG 卡片、成长路线、属性和结算反馈。
+- MVP 阶段优先用 CSS 实现容器、按钮、卡片、标签和进度条，不依赖完整插图才能交付。
+- 插画、徽章、图标、九宫格边框、悬停状态和动效属于后续精修项，用户后续按需补充素材后再逐步替换。
+- 图表类内容必须用前端组件渲染，例如 ECharts 雷达图、折线图和趋势图，不用静态图片替代真实数据。
+- 桌面端可参考当前高保真图布局；移动端必须改为顶部导航或折叠菜单 + 单列卡片流，不能直接照搬桌面密集布局。
 
 ## 后续 TODO
 
@@ -375,9 +489,28 @@ LifeQuest/
 
 ### 前端
 
-- 创建基础布局。
-- 创建登录注册、成长首页、每日记录、每日结算、成长路线、趋势、周报等页面骨架。
-- 引入图表组件目录和游戏化展示组件目录。
+#### 第一优先级：完成 MVP 真实流程页面
+
+第一优先级页面已完成，后续进入第二优先级页面骨架和可视化补齐。
+
+#### 第二优先级：补齐页面骨架和可视化
+
+- 实现成长路线页基础版：
+  - 展示路线章节、当前章节、完成进度、下一目标和最近成就
+  - 后端路线推进逻辑完成前可使用 mock 数据
+- 实现数据趋势页基础版：
+  - 使用 ECharts 展示评分趋势、学习时长、睡眠、娱乐控制和属性变化
+  - 后端趋势接口完成前可使用 mock 数据
+- 实现周报页基础版：
+  - 展示本周评分、经验、主要问题、成长点、敌人统计和下周目标
+  - 后端周报接口完成前可使用 mock 数据
+
+#### 第三优先级：视觉精修和素材替换
+
+- 基于 `docs/frontend/design/dashboard_reference.md` 统一前端视觉规范。
+- MVP 阶段不强制完成完整组件插图、独立徽章、复杂装饰边框和动画。
+- 用户后续补充独立图片素材后，再逐步替换导航图标、徽章、Buff / Debuff 图标、地图插画、AI 伙伴插画和九宫格边框。
+- 完成桌面端视觉后，再专门优化移动端单列卡片流和触控操作。
 
 ### 基础设施
 
